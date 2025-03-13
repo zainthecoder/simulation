@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --time=00:50:00
-#SBATCH --partition=sgpu_devel
+#SBATCH --partition=mlgpu_devel
 #SBATCH --error=/home/s28zabed_hpc/simulation/logs/error_output.log
 #SBATCH --output=/home/s28zabed_hpc/simulation/logs/server_output.log
 #SBATCH --gpus=4

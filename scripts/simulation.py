@@ -146,8 +146,8 @@ class User:
             UserAction.ASK: "asking general questions about products",
             UserAction.SEEK: "seeking expert advice",
             UserAction.DECIDE: "ready to make a purchase decision",
-            UserAction.ACCEPT: "accepting the previous response",
-            UserAction.REJECT: "rejecting the previous response"
+            UserAcceptAction.ACCEPT: "accepting the previous response",
+            UserAcceptAction.REJECT: "rejecting the previous response"
         }
         
         base_desc = f"{descriptions[self.persona]}, {preference_desc[self.preference]}, {goal_desc[self.goal]}"
@@ -158,7 +158,7 @@ class User:
 
     def can_perform_action(self, action: UserAction) -> bool:
         """Check if the user can perform the given action based on their current state"""
-        if action in [UserAction.ACCEPT, UserAction.REJECT]:
+        if action in [UserAcceptAction.ACCEPT, UserAcceptAction.REJECT]:
             return True  # Can always accept/reject responses
         elif action == UserAction.ASK:
             return True  # Can always ask questions
@@ -367,8 +367,8 @@ class Simulation:
             self.user.set_action(UserAction.ASK)
             return UserAction.ASK, "I have a question about the products."
 
-    def generate_user_accept_response(self) -> Tuple[UserAction, str]:
-        """Generate the user's response based on the conversation context"""
+    def generate_user_accept_response(self) -> Tuple[UserAcceptAction, str]:
+        """Generate accept/reject response from user"""
         prompt = get_prompt(
             PromptType.USER_ACCEPT_RESPONSE,
             user_description=self.user.get_user_description(),
@@ -388,11 +388,7 @@ class Simulation:
         }
         
         response = self.generate_structured_response(prompt, json_schema)
-        action = UserAction(response["action"])
-        if action not in [UserAction.ACCEPT, UserAction.REJECT]:
-            raise ValueError(f"Invalid action for user accept response: {action}. Expected ACCEPT or REJECT.")
-        
-        self.user.set_action(action)
+        action = UserAcceptAction(response["action"])
         return action, response.get("response", "")
     
     def generate_expert_response(self) -> Tuple[ExpertAction, str]:
@@ -443,14 +439,14 @@ class Simulation:
             print(f"\nAgent: {agent_response}")
             
             # Step 2: User reacts
-            user_action = self.generate_user_accept_response()
-            self.conversation_history.add_message(Role.USER, user_action)
-            print(f"\nUser: {user_action}")
+            accept_action, accept_response = self.generate_user_accept_response()
+            self.conversation_history.add_message(Role.USER, accept_response, accept_action)
+            print(f"\nUser: {accept_response}")
             
-            if user_action == UserAcceptAction.REJECT:
+            if accept_action == UserAcceptAction.REJECT:
                 continue
         
-            elif user_action == UserAction.ACCEPT:
+            elif accept_action == UserAcceptAction.ACCEPT:
                 
                 user_action, user_response = self.generate_user_response()
                 self.conversation_history.add_message(Role.USER, user_response, user_action)
@@ -478,7 +474,7 @@ class Simulation:
                         if user_action == UserAcceptAction.REJECT:
                             continue
                         
-                        if user_action == UserAction.ACCEPT:
+                        if user_action == UserAcceptAction.ACCEPT:
                             break
                         
             

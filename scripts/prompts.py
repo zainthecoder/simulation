@@ -7,6 +7,7 @@ class PromptType(Enum):
     AGENT_RESPONSE = "agent_response"
     USER_RESPONSE = "user_response"
     EXPERT_RESPONSE = "expert_response"
+    USER_ACCEPT_RESPONSE = "user_accept_response"
 
 
 
