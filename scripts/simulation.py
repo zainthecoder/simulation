@@ -106,8 +106,8 @@ class ConversationHistory:
                 {
                     "role": msg.role.value,
                     "content": msg.content,
-                    "action": msg.action if msg.action else None,
-                    "timestamp": msg.timestamp.isoformat(),
+                    "action": msg.action.value if (msg.action and hasattr(msg.action, 'value')) else msg.action,
+                    "timestamp": msg.timestamp.isoformat()
                 }
                 for msg in self.messages
             ]
@@ -354,7 +354,6 @@ class Simulation:
             user_description=self.user.get_user_description(),
             conversation_context=self.conversation_history.get_context(),
             action_list=[UserAction.DECIDE, UserAction.SEEK, UserAction.ASK],
-            #action_list=[UserAction.DECIDE, UserAction.SEEK],
             product_list=self.user.current_product_list,
             product=self.user.current_product,
             last_message=self.conversation_history.get_last_message().content,
@@ -486,7 +485,7 @@ class Simulation:
         product = initial_response.get("product", "")
         self.user.set_product(product)
         
-        self.conversation_history.add_message(Role.USER, initial_response, AgentAction.CLARIFICATION)
+        self.conversation_history.add_message(Role.USER, initial_response, UserAction.ASK)
         print(f"\nUser: {initial_response}")
         
         expert_flag = False
