@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import random
 import json
 import logging
@@ -7,6 +7,9 @@ from jsonformer import Jsonformer
 from model_config import initialize_model, get_bnb_config
 from prompts import PromptType, get_prompt
 import pprint
+from dataclasses import dataclass
+from datetime import datetime
+
 # Load access token
 with open('token.json', 'r') as f:
     token_data = json.load(f)
@@ -26,6 +29,59 @@ class Goal(Enum):
     INFORMATION_SEEKING = "information_seeking"
     DECISION_MAKING = "decision_making"
 
+class UserAction(Enum):
+    ASK = "ask_general_questions"
+    SEEK = "seek_expert_advice"
+    DECIDE = "choose_item"
+    ACCEPT = "accept_response"
+    REJECT = "reject_response"
+
+class AgentAction(Enum):
+    CLARIFICATION = "ask_clarification"
+    ANSWER = "answer_question"
+    RECOMMEND = "make_recommendation"
+    DISAGREE = "disagree_with_expert"
+    AGREE = "agree_with_expert"
+    REFINE = "refine_recommendation"
+    WARRANTY = "discuss_warranty"
+
+class ExpertAction(Enum):
+    DISAGREE = "disagree_with_agent"
+    AGREE = "agree_with_agent"
+    SUGGEST = "suggest_new_product"
+
+class Role(Enum):
+    USER = "user"
+    AGENT = "agent"
+    EXPERT = "expert"
+
+@dataclass
+class Message:
+    role: Role
+    content: str
+    action: Optional[Enum] = None
+    timestamp: datetime = datetime.now()
+
+class ConversationHistory:
+    def __init__(self):
+        self.messages: List[Message] = []
+        
+    def add_message(self, role: Role, content: str, action: Optional[Enum] = None):
+        """Add a new message to the conversation history"""
+        self.messages.append(Message(role=role, content=content, action=action))
+        
+    def get_context(self) -> str:
+        """Get the full conversation context as a formatted string"""
+        context = []
+        for msg in self.messages:
+            role_prefix = f"{msg.role.value.upper()}: "
+            context.append(f"{role_prefix}{msg.content}")
+        return "\n".join(context)
+    
+    def get_last_message(self) -> Optional[Message]:
+        """Get the last message in the conversation"""
+        return self.messages[-1] if self.messages else None
+
 class Strategy(Enum):
     REVENUE_ORIENTED = "revenue_oriented"
     PRODUCT_ORIENTED = "product_oriented"
@@ -36,6 +92,11 @@ class User:
         self.persona = persona
         self.preference = preference
         self.goal = goal
+        self.current_action: Optional[UserAction] = None
+        
+    def set_action(self, action: UserAction):
+        """Set the current action for the user"""
+        self.current_action = action
         
     def get_user_description(self) -> str:
         """Generate a natural language description of the user"""
@@ -56,12 +117,41 @@ class User:
             Goal.DECISION_MAKING: "and is ready to make a purchase decision"
         }
         
-        return f"{descriptions[self.persona]}, {preference_desc[self.preference]}, {goal_desc[self.goal]}"
+        action_desc = {
+            UserAction.ASK: "asking general questions about products",
+            UserAction.SEEK: "seeking expert advice",
+            UserAction.DECIDE: "ready to make a purchase decision",
+            UserAction.ACCEPT: "accepting the previous response",
+            UserAction.REJECT: "rejecting the previous response"
+        }
+        
+        base_desc = f"{descriptions[self.persona]}, {preference_desc[self.preference]}, {goal_desc[self.goal]}"
+        if self.current_action:
+            base_desc += f", {action_desc[self.current_action]}"
+            
+        return base_desc
+
+    def can_perform_action(self, action: UserAction) -> bool:
+        """Check if the user can perform the given action based on their current state"""
+        if action in [UserAction.ACCEPT, UserAction.REJECT]:
+            return True  # Can always accept/reject responses
+        elif action == UserAction.ASK:
+            return True  # Can always ask questions
+        elif action == UserAction.SEEK:
+            return self.goal == Goal.INFORMATION_SEEKING  # Can seek advice while gathering information
+        elif action == UserAction.DECIDE:
+            return self.goal == Goal.DECISION_MAKING  # Can only decide when in decision-making mode
+        return False
 
 class Agent:
     def __init__(self, strategy: Strategy):
         self.name = "Shopping Assistant"
         self.strategy = strategy
+        self.current_action: Optional[AgentAction] = None
+        
+    def set_action(self, action: AgentAction):
+        """Set the current action for the agent"""
+        self.current_action = action
         
     def get_agent_description(self) -> str:
         """Generate a natural language description of the agent"""
@@ -70,8 +160,45 @@ class Agent:
             Strategy.PRODUCT_ORIENTED: "focused on promoting high-quality products",
             Strategy.CUSTOMER_ORIENTED: "focused on customer satisfaction and needs"
         }
-        return f"A shopping assistant {strategy_desc[self.strategy]}"
         
+        action_desc = {
+            AgentAction.CLARIFICATION: "asking for clarification",
+            AgentAction.ANSWER: "answering questions",
+            AgentAction.RECOMMEND: "making recommendations",
+            AgentAction.DISAGREE: "disagreeing with expert advice",
+            AgentAction.AGREE: "agreeing with expert advice",
+            AgentAction.REFINE: "refining recommendations",
+            AgentAction.WARRANTY: "discussing warranty options"
+        }
+        
+        base_desc = f"A shopping assistant {strategy_desc[self.strategy]}"
+        if self.current_action:
+            base_desc += f", {action_desc[self.current_action]}"
+            
+        return base_desc
+
+class Expert:
+    def __init__(self):
+        self.name = "Product Expert"
+        self.current_action: Optional[ExpertAction] = None
+        
+    def set_action(self, action: ExpertAction):
+        """Set the current action for the expert"""
+        self.current_action = action
+        
+    def get_expert_description(self) -> str:
+        """Generate a natural language description of the expert"""
+        action_desc = {
+            ExpertAction.DISAGREE: "disagreeing with the agent's advice",
+            ExpertAction.AGREE: "agreeing with the agent's advice",
+            ExpertAction.SUGGEST: "suggesting alternative products"
+        }
+        
+        base_desc = "A product expert"
+        if self.current_action:
+            base_desc += f", {action_desc[self.current_action]}"
+            
+        return base_desc
 
 class Product:
     def __init__(self, name: str):
@@ -84,6 +211,8 @@ class Simulation:
     def __init__(self):
         self.user: Optional[User] = None
         self.agent: Optional[Agent] = None
+        self.expert: Optional[Expert] = None
+        self.conversation_history = ConversationHistory()
         
         # Initialize model
         logging.info("Starting model initialization...")
@@ -150,17 +279,164 @@ class Simulation:
         """Get the review for a specific product"""
         return self.product_reviews.get(product.name, "No review available.")
         
+    def generate_agent_response(self) -> Tuple[AgentAction, str]:
+        """Generate the agent's response based on the conversation context"""
+        prompt = get_prompt(
+            PromptType.AGENT_RESPONSE,
+            agent_description=self.agent.get_agent_description(),
+            user_description=self.user.get_user_description(),
+            conversation_context=self.conversation_history.get_context(),
+            available_products=[p.name for p in self.current_product_list]
+        )
+        
+        json_schema = {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [action.value for action in AgentAction]
+                },
+                "response": {"type": "string"}
+            },
+            "required": ["action", "response"]
+        }
+        
+        response = self.generate_structured_response(prompt, json_schema)
+        action = AgentAction(response["action"])
+        self.agent.set_action(action)
+        return action, response["response"]
+
+    def generate_user_response(self) -> Tuple[UserAction, str]:
+        """Generate the user's response based on the conversation context"""
+        prompt = get_prompt(
+            PromptType.USER_RESPONSE,
+            user_description=self.user.get_user_description(),
+            conversation_context=self.conversation_history.get_context(),
+            last_message=self.conversation_history.get_last_message().content if self.conversation_history.get_last_message() else None
+        )
+        
+        json_schema = {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [action.value for action in UserAction]
+                },
+                "response": {"type": "string"}
+            },
+            "required": ["action", "response"]
+        }
+        
+        response = self.generate_structured_response(prompt, json_schema)
+        action = UserAction(response["action"])
+        if self.user.can_perform_action(action):
+            self.user.set_action(action)
+            return action, response["response"]
+        else:
+            # If action is not allowed, default to asking a question
+            self.user.set_action(UserAction.ASK)
+            return UserAction.ASK, "I have a question about the products."
+
+    def generate_expert_response(self) -> Tuple[ExpertAction, str]:
+        """Generate the expert's response based on the conversation context"""
+        prompt = get_prompt(
+            PromptType.EXPERT_RESPONSE,
+            expert_description=self.expert.get_expert_description(),
+            user_description=self.user.get_user_description(),
+            conversation_context=self.conversation_history.get_context(),
+            available_products=[p.name for p in self.current_product_list]
+        )
+        
+        json_schema = {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [action.value for action in ExpertAction]
+                },
+                "response": {"type": "string"}
+            },
+            "required": ["action", "response"]
+        }
+        
+        response = self.generate_structured_response(prompt, json_schema)
+        action = ExpertAction(response["action"])
+        self.expert.set_action(action)
+        return action, response["response"]
+
     def run(self):
+        """Run the main simulation loop"""
         if not self.user:
             raise ValueError("User not initialized. Please call initialize_user first.")
         if not self.agent:
             raise ValueError("Agent not initialized. Please call initialize_agent first.")
         if not self.current_product_list:
             raise ValueError("Product list not selected. Please call select_random_product_list first.")
-        # TODO: Implement main simulation loop
-        pass
-    
- 
+            
+        print("\nStarting conversation...")
+        print(f"User: {self.user.get_user_description()}")
+        print(f"Agent: {self.agent.get_agent_description()}")
+        
+        while True:
+            # Step 1: Agent responds
+            agent_action, agent_response = self.generate_agent_response()
+            self.conversation_history.add_message(Role.AGENT, agent_response, agent_action)
+            print(f"\nAgent: {agent_response}")
+            
+            # Step 2: User reacts
+            user_action, user_response = self.generate_user_response()
+            self.conversation_history.add_message(Role.USER, user_response, user_action)
+            print(f"\nUser: {user_response}")
+            
+            # Check if user decided to buy
+            if user_action == UserAction.DECIDE:
+                print("\nUser has decided to make a purchase. Conversation ended.")
+                break
+                
+            # Step 3: Conditional flow based on user acceptance
+            if user_action == UserAction.REJECT:
+                # If user rejected agent's response, continue with agent
+                continue
+            elif user_action == UserAction.ACCEPT:
+                # If user accepted, check next action
+                next_user_action, next_user_response = self.generate_user_response()
+                self.conversation_history.add_message(Role.USER, next_user_response, next_user_action)
+                print(f"\nUser: {next_user_response}")
+                
+                if next_user_action == UserAction.SEEK:
+                    # Step 4: Expert interaction loop
+                    while True:
+                        # Expert responds
+                        expert_action, expert_response = self.generate_expert_response()
+                        self.conversation_history.add_message(Role.EXPERT, expert_response, expert_action)
+                        print(f"\nExpert: {expert_response}")
+                        
+                        # User reacts to expert
+                        expert_user_action, expert_user_response = self.generate_user_response()
+                        self.conversation_history.add_message(Role.USER, expert_user_response, expert_user_action)
+                        print(f"\nUser: {expert_user_response}")
+                        
+                        if expert_user_action == UserAction.ACCEPT:
+                            # Step 6: Agent final response
+                            agent_action, agent_response = self.generate_agent_response()
+                            self.conversation_history.add_message(Role.AGENT, agent_response, agent_action)
+                            print(f"\nAgent: {agent_response}")
+                            break  # Exit expert loop when user accepts
+                        elif expert_user_action == UserAction.REJECT:
+                            # If user rejects expert advice, continue expert loop
+                            continue
+                        elif expert_user_action == UserAction.DECIDE:
+                            print("\nUser has decided to make a purchase. Conversation ended.")
+                            return  # Exit entire simulation
+                        elif expert_user_action == UserAction.ASK:
+                            # If user asks a question, break expert loop and return to agent
+                            break
+                elif next_user_action == UserAction.DECIDE:
+                    print("\nUser has decided to make a purchase. Conversation ended.")
+                    break
+                elif next_user_action == UserAction.ASK:
+                    # If user asks a question, continue with agent
+                    continue
 
     def generate_structured_response(self, prompt: str, json_schema: dict) -> dict:
         """
@@ -255,7 +531,7 @@ class Simulation:
 if __name__ == "__main__":
     sim = Simulation()
     
-    # Initialize user and agent
+    # Initialize user, agent, and expert
     sim.initialize_random_user()
     sim.initialize_random_agent()
     
@@ -267,5 +543,7 @@ if __name__ == "__main__":
     questions_response = sim.generate_initial_questions()
     
     print(questions_response)
+    
+    # Now i have 
 
 
