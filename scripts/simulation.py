@@ -2,6 +2,7 @@ from enum import Enum
 from typing import List, Dict, Optional
 import random
 import json
+import logging
 from jsonformer import Jsonformer
 from model_config import initialize_model, get_bnb_config
 
@@ -84,21 +85,15 @@ class Simulation:
         self.agent: Optional[Agent] = None
         
         # Initialize model
-        try:
-            bnb_config = get_bnb_config()
-            self.model, self.tokenizer = initialize_model(
-                access_token=access_token,
-                model_name="meta-llama/Meta-Llama-3-8B-Instruct",
-                bnb_config=bnb_config
-            )
-        except Exception as e:
-            print(f"Warning: Could not initialize model with quantization: {e}")
-            print("Falling back to standard model loading...")
-            self.model, self.tokenizer = initialize_model(
-                access_token=access_token,
-                model_name="meta-llama/Meta-Llama-3-8B-Instruct",
-                bnb_config=None
-            )
+        logging.info("Starting model initialization...")
+        bnb_config = get_bnb_config()
+        
+        self.model, self.tokenizer = initialize_model(
+            access_token=access_token,
+            model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+            bnb_config=bnb_config
+        )
+        logging.info("Model loaded successfully")
         
         # Create all possible products
         self.all_products = {
