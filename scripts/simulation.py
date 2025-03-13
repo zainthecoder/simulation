@@ -5,6 +5,7 @@ import json
 import logging
 from jsonformer import Jsonformer
 from model_config import initialize_model, get_bnb_config
+from prompts import PromptType, get_prompt
 
 # Load access token
 with open('token.json', 'r') as f:
@@ -159,69 +160,130 @@ class Simulation:
         # TODO: Implement main simulation loop
         pass
     
-    def run_prompting(self, tokenizer, model, messages, json_schema):
+ 
+
+    def generate_structured_response(self, prompt: str, json_schema: dict) -> dict:
         """
-        Run the prompting process using the provided model and tokenizer.
+        Generate a structured response from the model using JSONformer.
         
         Args:
-            tokenizer: The tokenizer to use for processing the messages
-            model: The language model to use
-            messages: List of messages to process
-            json_schema: The JSON schema for formatting the response
+            prompt: The input prompt
+            json_schema: The JSON schema defining the expected response structure
             
         Returns:
-            tuple: (prompt, response) where prompt is the processed input and
-                  response is the model's structured output
+            dict: Structured response from the model
         """
-        prompt = tokenizer.apply_chat_template(
-            messages, 
-            tokenize=False, 
-            add_generation_prompt=True, 
+        logging.info("Generating structured response...")
+        
+        # Prepare messages for chat template
+        messages = [
+            {"role": "system", "content": "You are a helpful shopping assistant. Provide responses in the specified JSON format."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        # Apply chat template
+        formatted_prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
             return_tensors="pt"
         )
         
+        # Initialize JSONformer
         jsonformer = Jsonformer(
-            model, 
-            tokenizer, 
-            json_schema, 
-            prompt, 
+            self.model,
+            self.tokenizer,
+            json_schema,
+            formatted_prompt,
             max_number_tokens=2000,
             max_array_length=2000,
             max_string_token_length=2000
         )
         
+        # Generate response
         response = jsonformer()
-        return (prompt, response)
+        logging.info("Successfully generated structured response")
+        return response
 
+    def generate_initial_questions(self) -> dict:
+        """Generate initial questions based on user traits and available products"""
+        prompt = get_prompt(
+            PromptType.INITIAL_QUESTIONS,
+            persona=self.user.persona.value,
+            preference=self.user.preference.value,
+            goal=self.user.goal.value,
+            products=[p.name for p in self.current_product_list]
+        )
+        
+        # Define JSON schema for questions
+        json_schema = {
+            "type": "object",
+            "properties": {
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"},
+                            "purpose": {"type": "string"}
+                        },
+                        "required": ["question", "purpose"]
+                    },
+                    "minItems": 3,
+                    "maxItems": 4
+                }
+            },
+            "required": ["questions"]
+        }
+        
+        return self.generate_structured_response(prompt, json_schema)
 
-sim = Simulation()
+    # def generate_product_recommendation(self) -> str:
+    #     """Generate product recommendation based on user traits and reviews"""
+    #     product_reviews = "\n".join([
+    #         f"{p.name}: {self.product_reviews[p.name]}"
+    #         for p in self.current_product_list
+    #     ])
+        
+    #     prompt = get_prompt(
+    #         PromptType.PRODUCT_RECOMMENDATION,
+    #         persona=self.user.persona.value,
+    #         preference=self.user.preference.value,
+    #         goal=self.user.goal.value,
+    #         product_reviews=product_reviews
+    #     )
+    #     return self._generate_response(prompt)
 
-# Initialize user and agent
-sim.initialize_random_user()
-sim.initialize_random_agent()
+    def _generate_response(self, prompt: str) -> str:
+        """Generate response from the model for a given prompt"""
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        outputs = self.model.generate(
+            **inputs,
+            max_length=500,
+            num_return_sequences=1,
+            temperature=0.7,
+            do_sample=True
+        )
+        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        return response
 
-# Select a random product list
-current_products = sim.select_random_product_list()
-
-# Print current products and their reviews
-for product in current_products:
-    review = sim.get_product_review(product)
-    print(f"{product.name}: {review}")
-
-# print user description
-print(sim.user.get_user_description())
-
-# Build initial prompt with user traits and product context
-user_traits_prompt = f"""
-User traits:
-- Persona: {sim.user.persona}
-- Preference: {sim.user.preference} 
-- Goal: {sim.user.goal}
-
-Available products:
-{[p.name for p in current_products]}
-
-Based on the user traits and available products, generate 3-4 general questions to ask about the recommended items.
-Questions should help understand the user's needs better.
-"""
+# Example usage
+if __name__ == "__main__":
+    sim = Simulation()
+    
+    # Initialize user and agent
+    sim.initialize_random_user()
+    sim.initialize_random_agent()
+    
+    # Select a random product list
+    current_products = sim.select_random_product_list()
+    
+    # Generate initial questions
+    print("\nGenerating initial questions...")
+    questions_response = sim.generate_initial_questions()
+    
+    print("\nGenerated Questions:")
+    for q in questions_response["questions"]:
+        print(f"\nQuestion: {q['question']}")
+        print(f"Purpose: {q['purpose']}")
 
