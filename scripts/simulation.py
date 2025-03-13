@@ -154,6 +154,9 @@ for product in current_products:
     review = sim.get_product_review(product)
     print(f"{product.name}: {review}")
 
+# print user description
+print(sim.user.get_user_description())
+
 # Build initial prompt with user traits and product context
 user_traits_prompt = f"""
 User traits:
@@ -168,119 +171,5 @@ Based on the user traits and available products, generate 3-4 general questions 
 Questions should help understand the user's needs better.
 """
 
-# TODO: Send prompt to LLM and get response
-# questions = llm.generate(user_traits_prompt)
-
-# For now, print the prompt that would be sent
-print("\nPrompt that would be sent to LLM:")
-print(user_traits_prompt)
-
-from transformers import AutoModelForQuestionAnswering, AutoTokenizer
-import torch
-
-# Load model and tokenizer
-model_name = "deepset/roberta-base-squad2"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForQuestionAnswering.from_pretrained(model_name)
-
-# Get question from first prompt
-def get_question_from_prompt(prompt):
-    # For demonstration, using a simple question about user traits
-    # In practice, this would be more sophisticated based on the prompt
-    question = "What specific needs does this user have based on their traits?"
-    return question
-
-# Build second prompt with agent strategy and question
-def build_answer_prompt(question, agent_strategy):
-    answer_prompt = f"""
-Agent Strategy: {agent_strategy}
-
-Question from analysis: {question}
-
-Based on the agent's strategy and the question above, provide a detailed response
-that addresses the user's specific needs and aligns with the agent's approach.
-"""
-    return answer_prompt
-
-# Build third prompt for user decision
-def build_user_decision_prompt(agent_response):
-    user_prompt = f"""
-Based on the previous interaction:
-
-Agent's Response: {agent_response}
-
-As a user with the following traits:
-- Persona: {sim.user.persona}
-- Preference: {sim.user.preference}
-- Goal: {sim.user.goal}
-
-What would you like to do?
-[UserSeek] Seek expert advice
-[UserDecide] Choose an item to buy
-
-Please respond with your choice and brief explanation.
-"""
-    return user_prompt
-
-# Build fourth prompt based on user's decision
-def build_fourth_prompt(user_decision, user_explanation, agent_response):
-    if "UserSeek" in user_decision:
-        expert_prompt = f"""
-As an expert advisor, considering:
-- User's explanation: {user_explanation}
-- Previous agent response: {agent_response}
-- Available products: {[p.name for p in current_products]}
-
-Provide detailed expert advice to help the user make an informed decision.
-"""
-        return expert_prompt
-    else:
-        agent_prompt = f"""
-As a sales agent, considering:
-- User's choice to purchase: {user_explanation}
-- Previous interaction: {agent_response}
-- Available products: {[p.name for p in current_products]}
-
-Recommend the most suitable product and explain why.
-"""
-        return agent_prompt
-
-# Get answer using RoBERTa model
-def get_answer(question, context):
-    inputs = tokenizer(question, context, return_tensors="pt")
-    outputs = model(**inputs)
-    
-    answer_start = torch.argmax(outputs.start_logits)
-    answer_end = torch.argmax(outputs.end_logits)
-    
-    answer = tokenizer.convert_tokens_to_string(
-        tokenizer.convert_ids_to_tokens(
-            inputs["input_ids"][0][answer_start:answer_end+1]
-        )
-    )
-    return answer
-
-# Execute the conversation flow
-first_question = get_question_from_prompt(user_traits_prompt)
-print("\nQuestion generated from first prompt:")
-print(first_question)
-
-agent_strategy = sim.agent.strategy if hasattr(sim.agent, 'strategy') else "Default strategy"
-second_prompt = build_answer_prompt(first_question, agent_strategy)
-agent_response = get_answer(first_question, second_prompt)
-print("\nAgent Response:")
-print(agent_response)
-
-# Third prompt - User decision
-user_prompt = build_user_decision_prompt(agent_response)
-user_response = get_answer(first_question, user_prompt)  # Using first_question as context
-print("\nUser Decision:")
-print(user_response)
-
-# Fourth prompt - Expert/Agent response
-fourth_prompt = build_fourth_prompt(user_response, user_response, agent_response)
-final_response = get_answer(first_question, fourth_prompt)
-print("\nFinal Response (Expert/Agent):")
-print(final_response)
 
 
