@@ -42,8 +42,6 @@ class AgentAction(Enum):
     CLARIFICATION = "ask_clarification"
     ANSWER = "answer_question"
     RECOMMEND = "make_recommendation"
-
-class AgentActionToExpert(Enum):
     DISAGREE = "disagree_with_agent"
     AGREE = "agree_with_agent"
     REFINE = "refine_recommendation"
@@ -306,7 +304,7 @@ class Simulation:
         """Get the review for a specific product"""
         return self.product_reviews.get(product.name, "No review available.")
         
-    def generate_agent_response(self) -> Tuple[AgentAction, str]:
+    def generate_agent_response(self, expert_action: Optional[AgentAction] = None) -> Tuple[AgentAction, str]:
         """Generate the agent's response based on the conversation context"""
         prompt = get_prompt(
             PromptType.AGENT_RESPONSE,
@@ -316,12 +314,17 @@ class Simulation:
             available_products=[p.name for p in self.current_product_list]
         )
         
+        if expert_action:
+            ActionList = [AgentAction.DISAGREE, AgentAction.AGREE, AgentAction.REFINE, AgentAction.WARRANTY]
+        else:
+            ActionList = [AgentAction.CLARIFICATION, AgentAction.ANSWER, AgentAction.RECOMMEND]
+        
         json_schema = {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": [action.value for action in AgentAction]
+                    "enum": [action.value for action in ActionList]
                 },
                 "response": {"type": "string"}
             },
@@ -431,13 +434,11 @@ class Simulation:
         print("\nStarting conversation...")
         print(f"User: {self.user.get_user_description()}")
         print(f"Agent: {self.agent.get_agent_description()}")
+        expert_flag = False
         
         while True:
-            
-            expert_flag = True
-            
             # Step 1: Agent responds
-            agent_action, agent_response = self.generate_agent_response()
+            agent_action, agent_response = self.generate_agent_response(expert_flag)
             self.conversation_history.add_message(Role.AGENT, agent_response, agent_action)
             print(f"\nAgent: {agent_response}")
             
@@ -470,32 +471,19 @@ class Simulation:
                         self.conversation_history.add_message(Role.EXPERT, expert_response, expert_action)
                         print(f"\nExpert: {expert_response}")
                         
-                        # User reacts to expert
-                        expert_user_action, expert_user_response = self.generate_user_response()
-                        self.conversation_history.add_message(Role.USER, expert_user_response, expert_user_action)
-                        print(f"\nUser: {expert_user_response}")
+                        user_action, user_response = self.generate_user_accept_response()
+                        self.conversation_history.add_message(Role.USER, user_response, user_action)
+                        print(f"\nUser: {user_response}")
                         
-                        if expert_user_action == UserAction.ACCEPT:
-                            # Step 6: Agent final response
-                            agent_action, agent_response = self.generate_agent_response()
-                            self.conversation_history.add_message(Role.AGENT, agent_response, agent_action)
-                            print(f"\nAgent: {agent_response}")
-                            break  # Exit expert loop when user accepts
-                        elif expert_user_action == UserAction.REJECT:
-                            # If user rejects expert advice, continue expert loop
+                        if user_action == UserAcceptAction.REJECT:
                             continue
-                        elif expert_user_action == UserAction.DECIDE:
-                            print("\nUser has decided to make a purchase. Conversation ended.")
-                            return  # Exit entire simulation
-                        elif expert_user_action == UserAction.ASK:
-                            # If user asks a question, break expert loop and return to agent
+                        
+                        if user_action == UserAction.ACCEPT:
                             break
-                elif next_user_action == UserAction.DECIDE:
-                    print("\nUser has decided to make a purchase. Conversation ended.")
-                    break
-                elif next_user_action == UserAction.ASK:
-                    # If user asks a question, continue with agent
-                    continue
+                        
+            
+                        
+                        
 
         # Save conversation history at the end
         saved_file = self.conversation_history.save_to_file()
