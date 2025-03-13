@@ -339,8 +339,8 @@ class Simulation:
         }
 
         response = self.generate_structured_response(prompt, json_schema)
-        action = AgentAction(response["action"])
-        #action = response["action"]
+        #action = AgentAction(response["action"])
+        action = response["action"]
         print("\nAgent Response:")
         pprint.pprint(response)
         print("\nAgent Action:")
