@@ -2,4 +2,3 @@ venv/
 logs/
 token.json
 *.pyc
-conversation_*.json
