@@ -1,6 +1,14 @@
 from enum import Enum
 from typing import List, Dict, Optional
 import random
+import json
+from jsonformer import Jsonformer
+from model_config import initialize_model, get_bnb_config
+
+# Load access token
+with open('token.json', 'r') as f:
+    token_data = json.load(f)
+    access_token = token_data['access_token']
 
 class Persona(Enum):
     PARENT = "parent_shopping_for_kids_phone"
@@ -75,6 +83,23 @@ class Simulation:
         self.user: Optional[User] = None
         self.agent: Optional[Agent] = None
         
+        # Initialize model
+        try:
+            bnb_config = get_bnb_config()
+            self.model, self.tokenizer = initialize_model(
+                access_token=access_token,
+                model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+                bnb_config=bnb_config
+            )
+        except Exception as e:
+            print(f"Warning: Could not initialize model with quantization: {e}")
+            print("Falling back to standard model loading...")
+            self.model, self.tokenizer = initialize_model(
+                access_token=access_token,
+                model_name="meta-llama/Meta-Llama-3-8B-Instruct",
+                bnb_config=None
+            )
+        
         # Create all possible products
         self.all_products = {
             "iPhone 13": Product("iPhone 13"),
@@ -138,6 +163,40 @@ class Simulation:
             raise ValueError("Product list not selected. Please call select_random_product_list first.")
         # TODO: Implement main simulation loop
         pass
+    
+    def run_prompting(self, tokenizer, model, messages, json_schema):
+        """
+        Run the prompting process using the provided model and tokenizer.
+        
+        Args:
+            tokenizer: The tokenizer to use for processing the messages
+            model: The language model to use
+            messages: List of messages to process
+            json_schema: The JSON schema for formatting the response
+            
+        Returns:
+            tuple: (prompt, response) where prompt is the processed input and
+                  response is the model's structured output
+        """
+        prompt = tokenizer.apply_chat_template(
+            messages, 
+            tokenize=False, 
+            add_generation_prompt=True, 
+            return_tensors="pt"
+        )
+        
+        jsonformer = Jsonformer(
+            model, 
+            tokenizer, 
+            json_schema, 
+            prompt, 
+            max_number_tokens=2000,
+            max_array_length=2000,
+            max_string_token_length=2000
+        )
+        
+        response = jsonformer()
+        return (prompt, response)
 
 
 sim = Simulation()
@@ -170,6 +229,4 @@ Available products:
 Based on the user traits and available products, generate 3-4 general questions to ask about the recommended items.
 Questions should help understand the user's needs better.
 """
-
-
 

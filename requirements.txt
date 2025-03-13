@@ -1,6 +1,7 @@
-jsonformer>=0.5.0
-transformers>=4.36.0
-torch>=2.0.0
-typing-extensions>=4.0.0
-bitsandbytes>=0.41.0  # For model quantization
-accelerate>=0.24.0    # For device mapping
+jsonformer
+accelerate
+transformers
+pandas
+bitsandbytes
+torch
+datasets
