@@ -51,8 +51,9 @@ class AgentAction(Enum):
     DISAGREE = "disagree_with_agent"
     AGREE = "agree_with_agent"
     REFINE = "refine_recommendation"
-    WARRANTY = "discuss_warranty"
-
+    WARN = "give_warning"
+    NOKNOWLEDGE = "no_knowledge"
+    
 
 class ExpertAction(Enum):
     DISAGREE = "disagree_with_agent"
@@ -163,9 +164,9 @@ class User:
             UserAcceptAction.REJECT: "rejecting the previous response",
         }
 
-        base_desc = f"{descriptions[self.persona]}, {preference_desc[self.preference]}, {goal_desc[self.goal]}"
+        base_desc = f"persona: {descriptions[self.persona]}, preference: {preference_desc[self.preference]}, goal: {goal_desc[self.goal]}"
         if self.current_action:
-            base_desc += f", {action_desc[self.current_action]}"
+            base_desc += f", action: {action_desc[self.current_action]}"
 
         return base_desc
 
@@ -215,7 +216,8 @@ class Agent:
             AgentAction.DISAGREE: "disagreeing with expert advice",
             AgentAction.AGREE: "agreeing with expert advice",
             AgentAction.REFINE: "refining recommendations",
-            AgentAction.WARRANTY: "discussing warranty options",
+            AgentAction.WARN: "giving warning",
+            AgentAction.NOKNOWLEDGE: "no knowledge",
         }
 
         base_desc = f"A shopping assistant {strategy_desc[self.strategy]}"
@@ -330,13 +332,14 @@ class Simulation:
                 AgentAction.DISAGREE,
                 AgentAction.AGREE,
                 AgentAction.REFINE,
-                AgentAction.WARRANTY,
+                AgentAction.WARN,
             ]
         else:
             ActionList = [
                 AgentAction.CLARIFICATION,
                 AgentAction.ANSWER,
                 AgentAction.RECOMMEND,
+                AgentAction.NOKNOWLEDGE,
             ]
         
         prompt = get_prompt(
@@ -347,6 +350,7 @@ class Simulation:
             product_list=self.current_product_list,
             product=self.user.current_product,
             action_list=ActionList,
+            last_message=self.conversation_history.get_last_message().content,
         )
         print("\nAgent Prompt:")
         pprint.pprint(prompt)
@@ -364,7 +368,8 @@ class Simulation:
         }
 
         response = self.generate_structured_response(prompt, json_schema)
-        action = AgentAction(response["action"])
+        #action = AgentAction(response["action"])
+        action = response["action"]
         self.agent.set_action(action)
         print("\nAgent Response:")
         pprint.pprint(response)
@@ -380,6 +385,9 @@ class Simulation:
             conversation_context=self.conversation_history.get_context(),
             action_list=[UserAction.DECIDE, UserAction.SEEK, UserAction.ASK],
             #action_list=[UserAction.DECIDE, UserAction.SEEK],
+            product_list=self.current_product_list,
+            product=self.user.current_product,
+            last_message=self.conversation_history.get_last_message().content,
         )
         print("\nUser Prompt:")
         pprint.pprint(prompt)
@@ -417,6 +425,8 @@ class Simulation:
                 else None
             ),
             action_list=[UserAcceptAction.ACCEPT, UserAcceptAction.REJECT],
+            product_list=self.current_product_list,
+            product=self.user.current_product,
         )
         print("\nUser Accept Prompt:")
         pprint.pprint(prompt)
@@ -451,6 +461,7 @@ class Simulation:
             available_products=[p.name for p in self.current_product_list],
             action_list=[ExpertAction.DISAGREE, ExpertAction.AGREE, ExpertAction.SUGGEST],
             product=self.user.current_product,
+            last_message=self.conversation_history.get_last_message().content,
         )
         print("\nExpert Prompt:")
         pprint.pprint(prompt)
@@ -468,7 +479,8 @@ class Simulation:
         }
 
         response = self.generate_structured_response(prompt, json_schema)
-        action = ExpertAction(response["action"])
+        #action = ExpertAction(response["action"])
+        action = response["action"]
         self.expert.set_action(action)
         print("\nExpert Response:")
         pprint.pprint(response)

@@ -33,51 +33,63 @@ PROMPTS: Dict[PromptType, str] = {
     },
     PromptType.AGENT_RESPONSE: {
         "system": """
-        You are a shopping assistant helping a customer find the right product.
+        You are a sales assistant helping a customer find the right product.
         Your goal is to provide helpful information and recommendations based on the customer's needs.
         You should maintain a professional and helpful tone throughout the conversation.
         """,
         "user": """
-        Agent Description:
+        ### Agent Description: ###
         {agent_description}
 
-        User Description:
+        ### User Description: ###
         {user_description}
 
-        Selected Product:
+        ### Selected Product: ###
         {product}
         
-        Product List:
+        ### Product List: ###
         {product_list}
 
-        Conversation History:
+        ### Conversation History: ###
         {conversation_context}
         
-        Action List:
+        ### Action List: ###
         {action_list}
 
-        Based on the conversation context, action list and your role, provide a response and indicate your action from the action list.
+        Based on the conversation context, action list and your role, provide a response to the following user's query and indicate your action from the action list.
         Your response should be natural and helpful, and your action should reflect your intent.
+        
+        ### User's Query: ###
+        {last_message}
         """,
     },
     PromptType.USER_RESPONSE: {
         "system": """
         You are a customer shopping for a product.
-        You have specific needs and preferences, and you're interacting with a shopping assistant.
+        You have specific needs and preferences, and you're interacting with a sales assistant and product expert.
         Your responses should reflect your persona and current state in the shopping process.
         """,
         "user": """
-        User Description:
+        ### User Description: ###
         {user_description}
 
-        Conversation History:
+        ### Conversation History: ###
         {conversation_context}
 
-        Action List:
+        ### Action List: ###
         {action_list}
 
-        Based on your persona and action list, provide a response and indicate your action from the action list.
+        ### Product List: ###
+        {product_list}
+        
+        ### Selected Product: ###
+        {product}
+
+        Based on the conversation context, user description and action list, provide a response to the following sales assistant's reply and indicate your action from the action list.
         Your response should be natural and reflect your current needs and preferences.
+        
+        ### Sales Assistant's Reply: ###
+        {last_message}
         """,
     },
     PromptType.EXPERT_RESPONSE: {
@@ -87,26 +99,29 @@ PROMPTS: Dict[PromptType, str] = {
         You should focus on helping the customer make an informed decision.
         """,
         "user": """
-        Expert Description:
+        ### Expert Description: ###
         {expert_description}
 
-        User Description:
+        ### User Description: ###
         {user_description}
 
-        Available Products:
+        ### Available Products: ###
         {available_products}
 
-        Conversation History:
+        ### Conversation History: ###
         {conversation_context}
         
-        Action List:
+        ### Action List: ###
         {action_list}
         
-        Product:
+        ### Product: ###
         {product}
 
-        Based on your expertise and the conversation context, provide a response and indicate your action from the action list.
+        Based on your expertise and the conversation context, provide a response to the following user's query and indicate your action from the action list.
         Your response should be informative and help the customer make a better decision.
+        
+        ### User's Query: ###
+        {last_message}
         """,
     },
     PromptType.USER_ACCEPT_RESPONSE: {
@@ -116,20 +131,26 @@ PROMPTS: Dict[PromptType, str] = {
         Your responses should reflect your persona and current state in the shopping process.
         """,
         "user": """
-        User Description:
+        ### User Description: ###
         {user_description}
 
-        Conversation History:
+        ### Conversation History: ###
         {conversation_context}
 
-        Last Message:
-        {last_message}
+        ### Product List: ###
+        {product_list}
         
-        Action List:
+        ### Selected Product: ###
+        {product}
+        
+        ### Action List: ###
         {action_list}
 
-        Based on the conversation context and your role, provide whether you accept the last message or not.
+        Based on the conversation context and your role, provide whether you accept the following sales assistant's reply or not.
         Your response should be a single word: "accept" or "reject".
+        
+        ### Sales Assistant's Reply: ###
+        {last_message}
         """,
     },
 }
