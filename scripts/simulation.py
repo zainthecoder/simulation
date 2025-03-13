@@ -6,7 +6,7 @@ import logging
 from jsonformer import Jsonformer
 from model_config import initialize_model, get_bnb_config
 from prompts import PromptType, get_prompt
-
+import pprint
 # Load access token
 with open('token.json', 'r') as f:
     token_data = json.load(f)
@@ -175,15 +175,9 @@ class Simulation:
         """
         logging.info("Generating structured response...")
         
-        # Prepare messages for chat template
-        messages = [
-            {"role": "system", "content": "You are a helpful shopping assistant. Provide responses in the specified JSON format."},
-            {"role": "user", "content": prompt}
-        ]
-        
         # Apply chat template
         formatted_prompt = self.tokenizer.apply_chat_template(
-            messages,
+            prompt,
             tokenize=False,
             add_generation_prompt=True,
             return_tensors="pt"
@@ -214,26 +208,16 @@ class Simulation:
             goal=self.user.goal.value,
             products=[p.name for p in self.current_product_list]
         )
+        print("\nGenerated Prompt:")
+        pprint.pprint(prompt)
         
         # Define JSON schema for questions
         json_schema = {
             "type": "object",
             "properties": {
-                "questions": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "question": {"type": "string"},
-                            "purpose": {"type": "string"}
-                        },
-                        "required": ["question", "purpose"]
-                    },
-                    "minItems": 3,
-                    "maxItems": 4
-                }
-            },
-            "required": ["questions"]
+                "question": {"type": "string"},
+                "product": {"type": "string"}
+            }
         }
         
         return self.generate_structured_response(prompt, json_schema)
@@ -282,8 +266,6 @@ if __name__ == "__main__":
     print("\nGenerating initial questions...")
     questions_response = sim.generate_initial_questions()
     
-    print("\nGenerated Questions:")
-    for q in questions_response["questions"]:
-        print(f"\nQuestion: {q['question']}")
-        print(f"Purpose: {q['purpose']}")
+    print(questions_response)
+
 
