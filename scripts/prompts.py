@@ -44,13 +44,19 @@ PROMPTS: Dict[PromptType, str] = {
         User Description:
         {user_description}
 
-        Available Products:
-        {available_products}
+        Selected Product:
+        {product}
+        
+        Product List:
+        {product_list}
 
         Conversation History:
         {conversation_context}
+        
+        Action List:
+        {action_list}
 
-        Based on the conversation context and your role, provide a response and indicate your action.
+        Based on the conversation context, action list and your role, provide a response and indicate your action from the action list.
         Your response should be natural and helpful, and your action should reflect your intent.
         """,
     },
@@ -67,10 +73,10 @@ PROMPTS: Dict[PromptType, str] = {
         Conversation History:
         {conversation_context}
 
-        Last Message:
-        {last_message}
+        Action List:
+        {action_list}
 
-        Based on your persona and the conversation context, provide a response and indicate your action.
+        Based on your persona and action list, provide a response and indicate your action from the action list.
         Your response should be natural and reflect your current needs and preferences.
         """,
     },
@@ -92,8 +98,14 @@ PROMPTS: Dict[PromptType, str] = {
 
         Conversation History:
         {conversation_context}
+        
+        Action List:
+        {action_list}
+        
+        Product:
+        {product}
 
-        Based on your expertise and the conversation context, provide a response and indicate your action.
+        Based on your expertise and the conversation context, provide a response and indicate your action from the action list.
         Your response should be informative and help the customer make a better decision.
         """,
     },
@@ -112,6 +124,9 @@ PROMPTS: Dict[PromptType, str] = {
 
         Last Message:
         {last_message}
+        
+        Action List:
+        {action_list}
 
         Based on the conversation context and your role, provide whether you accept the last message or not.
         Your response should be a single word: "accept" or "reject".

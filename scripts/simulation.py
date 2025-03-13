@@ -130,6 +130,7 @@ class User:
         self.preference = preference
         self.goal = goal
         self.current_action: Optional[UserAction] = None
+        self.current_product: Optional[str] = None
 
     def set_action(self, action: UserAction):
         """Set the current action for the user"""
@@ -184,6 +185,10 @@ class User:
             )  # Can only decide when in decision-making mode
         return False
 
+    def set_product(self, product: str):
+        """Set the current product the user is interested in"""
+        self.current_product = product
+
 
 class Agent:
     def __init__(self, strategy: Strategy):
@@ -223,26 +228,6 @@ class Agent:
 class Expert:
     def __init__(self):
         self.name = "Product Expert"
-        self.current_action: Optional[ExpertAction] = None
-
-    def set_action(self, action: ExpertAction):
-        """Set the current action for the expert"""
-        self.current_action = action
-
-    def get_expert_description(self) -> str:
-        """Generate a natural language description of the expert"""
-        action_desc = {
-            ExpertAction.DISAGREE: "disagreeing with the agent's advice",
-            ExpertAction.AGREE: "agreeing with the agent's advice",
-            ExpertAction.SUGGEST: "suggesting alternative products",
-        }
-
-        base_desc = "A product expert"
-        if self.current_action:
-            base_desc += f", {action_desc[self.current_action]}"
-
-        return base_desc
-
 
 class Product:
     def __init__(self, name: str):
@@ -339,16 +324,7 @@ class Simulation:
         self, expert_action: Optional[AgentAction] = None
     ) -> Tuple[AgentAction, str]:
         """Generate the agent's response based on the conversation context"""
-        prompt = get_prompt(
-            PromptType.AGENT_RESPONSE,
-            agent_description=self.agent.get_agent_description(),
-            user_description=self.user.get_user_description(),
-            conversation_context=self.conversation_history.get_context(),
-            available_products=[p.name for p in self.current_product_list],
-        )
-        print("\nAgent Prompt:")
-        pprint.pprint(prompt)
-
+        
         if expert_action:
             ActionList = [
                 AgentAction.DISAGREE,
@@ -362,6 +338,18 @@ class Simulation:
                 AgentAction.ANSWER,
                 AgentAction.RECOMMEND,
             ]
+        
+        prompt = get_prompt(
+            PromptType.AGENT_RESPONSE,
+            agent_description=self.agent.get_agent_description(),
+            user_description=self.user.get_user_description(),
+            conversation_context=self.conversation_history.get_context(),
+            product_list=self.current_product_list,
+            product=self.user.current_product,
+            action_list=ActionList,
+        )
+        print("\nAgent Prompt:")
+        pprint.pprint(prompt)
 
         json_schema = {
             "type": "object",
@@ -390,11 +378,8 @@ class Simulation:
             PromptType.USER_RESPONSE,
             user_description=self.user.get_user_description(),
             conversation_context=self.conversation_history.get_context(),
-            last_message=(
-                self.conversation_history.get_last_message().content
-                if self.conversation_history.get_last_message()
-                else None
-            ),
+            action_list=[UserAction.DECIDE, UserAction.SEEK, UserAction.ASK],
+            #action_list=[UserAction.DECIDE, UserAction.SEEK],
         )
         print("\nUser Prompt:")
         pprint.pprint(prompt)
@@ -413,17 +398,12 @@ class Simulation:
 
         response = self.generate_structured_response(prompt, json_schema)
         action = UserAction(response["action"])
-        if self.user.can_perform_action(action):
-            self.user.set_action(action)
-            print("\nUser Response:")
-            pprint.pprint(response)
-            print("\nUser Action:")
-            pprint.pprint(action)
-            return action, response["response"]
-        else:
-            # If action is not allowed, default to asking a question
-            self.user.set_action(UserAction.ASK)
-            return UserAction.ASK, "I have a question about the products."
+        print("\nUser Response:")
+        pprint.pprint(response)
+        print("\nUser Action:")
+        pprint.pprint(action)
+        return action, response["response"]
+        
 
     def generate_user_accept_response(self) -> Tuple[UserAcceptAction, str]:
         """Generate accept/reject response from user"""
@@ -436,6 +416,7 @@ class Simulation:
                 if self.conversation_history.get_last_message()
                 else None
             ),
+            action_list=[UserAcceptAction.ACCEPT, UserAcceptAction.REJECT],
         )
         print("\nUser Accept Prompt:")
         pprint.pprint(prompt)
@@ -450,6 +431,8 @@ class Simulation:
             },
             "required": ["action"],
         }
+        print("\nUser Accept JSON Schema:")
+        pprint.pprint(json_schema)
 
         response = self.generate_structured_response(prompt, json_schema)
         action = UserAcceptAction(response["action"])
@@ -463,10 +446,11 @@ class Simulation:
         """Generate the expert's response based on the conversation context"""
         prompt = get_prompt(
             PromptType.EXPERT_RESPONSE,
-            expert_description=self.expert.get_expert_description(),
             user_description=self.user.get_user_description(),
             conversation_context=self.conversation_history.get_context(),
             available_products=[p.name for p in self.current_product_list],
+            action_list=[ExpertAction.DISAGREE, ExpertAction.AGREE, ExpertAction.SUGGEST],
+            product=self.user.current_product,
         )
         print("\nExpert Prompt:")
         pprint.pprint(prompt)
@@ -518,11 +502,10 @@ class Simulation:
         initial_response = self.generate_initial_questions()
         question = initial_response.get("question", "")
         product = initial_response.get("product", "")
+        self.user.set_product(product)
         
-        # Set agent's first response using the initial question
-        first_response = f"Let me ask you about {product}: {question}"
-        self.conversation_history.add_message(Role.AGENT, first_response, AgentAction.CLARIFICATION)
-        print(f"\nAgent: {first_response}")
+        self.conversation_history.add_message(Role.USER, initial_response, AgentAction.CLARIFICATION)
+        print(f"\nUser: {initial_response}")
         
         expert_flag = False
         
