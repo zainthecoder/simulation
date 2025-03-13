@@ -110,6 +110,27 @@ PROMPTS: Dict[PromptType, str] = {
         Based on your expertise and the conversation context, provide a response and indicate your action.
         Your response should be informative and help the customer make a better decision.
         """
+    },
+
+    PromptType.USER_ACCEPT_RESPONSE: {
+        "system": """
+        You are a customer shopping for a product.
+        You have specific needs and preferences, and you're interacting with a shopping assistant.
+        Your responses should reflect your persona and current state in the shopping process.
+        """,
+        "user": """
+        User Description:
+        {user_description}
+
+        Conversation History:
+        {conversation_context}
+
+        Last Message:
+        {last_message}
+
+        Based on the conversation context and your role, provide whether you accept the last message or not.
+        Your response should be a single word: "accept" or "reject".
+        """
     }
 }
 

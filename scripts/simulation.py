@@ -33,15 +33,19 @@ class UserAction(Enum):
     ASK = "ask_general_questions"
     SEEK = "seek_expert_advice"
     DECIDE = "choose_item"
-    ACCEPT = "accept_response"
-    REJECT = "reject_response"
+
+class UserAcceptAction(Enum):
+    ACCEPT = "accept"
+    REJECT = "reject"
 
 class AgentAction(Enum):
     CLARIFICATION = "ask_clarification"
     ANSWER = "answer_question"
     RECOMMEND = "make_recommendation"
-    DISAGREE = "disagree_with_expert"
-    AGREE = "agree_with_expert"
+
+class AgentActionToExpert(Enum):
+    DISAGREE = "disagree_with_agent"
+    AGREE = "agree_with_agent"
     REFINE = "refine_recommendation"
     WARRANTY = "discuss_warranty"
 
@@ -81,6 +85,29 @@ class ConversationHistory:
     def get_last_message(self) -> Optional[Message]:
         """Get the last message in the conversation"""
         return self.messages[-1] if self.messages else None
+
+    def save_to_file(self, filename: str = None):
+        """Save the conversation history to a JSON file"""
+        if filename is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"conversation_{timestamp}.json"
+            
+        conversation_data = {
+            "messages": [
+                {
+                    "role": msg.role.value,
+                    "content": msg.content,
+                    "action": msg.action.value if msg.action else None,
+                    "timestamp": msg.timestamp.isoformat()
+                }
+                for msg in self.messages
+            ]
+        }
+        
+        with open(filename, 'w') as f:
+            json.dump(conversation_data, f, indent=2)
+        
+        return filename
 
 class Strategy(Enum):
     REVENUE_ORIENTED = "revenue_oriented"
@@ -337,6 +364,34 @@ class Simulation:
             self.user.set_action(UserAction.ASK)
             return UserAction.ASK, "I have a question about the products."
 
+    def generate_user_accept_response(self) -> Tuple[UserAction, str]:
+        """Generate the user's response based on the conversation context"""
+        prompt = get_prompt(
+            PromptType.USER_ACCEPT_RESPONSE,
+            user_description=self.user.get_user_description(),
+            conversation_context=self.conversation_history.get_context(),
+            last_message=self.conversation_history.get_last_message().content if self.conversation_history.get_last_message() else None
+        )
+        
+        json_schema = {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [action.value for action in UserAcceptAction]
+                },
+            },
+            "required": ["action"]
+        }
+        
+        response = self.generate_structured_response(prompt, json_schema)
+        action = UserAction(response["action"])
+        if action not in [UserAction.ACCEPT, UserAction.REJECT]:
+            raise ValueError(f"Invalid action for user accept response: {action}. Expected ACCEPT or REJECT.")
+        
+        self.user.set_action(action)
+        return action, response.get("response", "")
+    
     def generate_expert_response(self) -> Tuple[ExpertAction, str]:
         """Generate the expert's response based on the conversation context"""
         prompt = get_prompt(
@@ -378,35 +433,39 @@ class Simulation:
         print(f"Agent: {self.agent.get_agent_description()}")
         
         while True:
+            
+            expert_flag = True
+            
             # Step 1: Agent responds
             agent_action, agent_response = self.generate_agent_response()
             self.conversation_history.add_message(Role.AGENT, agent_response, agent_action)
             print(f"\nAgent: {agent_response}")
             
             # Step 2: User reacts
-            user_action, user_response = self.generate_user_response()
-            self.conversation_history.add_message(Role.USER, user_response, user_action)
-            print(f"\nUser: {user_response}")
+            user_action = self.generate_user_accept_response()
+            self.conversation_history.add_message(Role.USER, user_action)
+            print(f"\nUser: {user_action}")
             
-            # Check if user decided to buy
-            if user_action == UserAction.DECIDE:
-                print("\nUser has decided to make a purchase. Conversation ended.")
-                break
-                
-            # Step 3: Conditional flow based on user acceptance
-            if user_action == UserAction.REJECT:
-                # If user rejected agent's response, continue with agent
+            if user_action == UserAcceptAction.REJECT:
                 continue
+        
             elif user_action == UserAction.ACCEPT:
-                # If user accepted, check next action
-                next_user_action, next_user_response = self.generate_user_response()
-                self.conversation_history.add_message(Role.USER, next_user_response, next_user_action)
-                print(f"\nUser: {next_user_response}")
                 
-                if next_user_action == UserAction.SEEK:
-                    # Step 4: Expert interaction loop
+                user_action, user_response = self.generate_user_response()
+                self.conversation_history.add_message(Role.USER, user_response, user_action)
+                print(f"\nUser: {user_response}")
+                
+                # Check if user decided to buy
+                if user_action == UserAction.DECIDE:
+                    print("\nUser has decided to make a purchase. Conversation ended.")
+                    break
+                
+                if user_action == UserAction.SEEK:
+                    # Expert interaction loop
                     while True:
-                        # Expert responds
+                        
+                        expert_flag = True
+                        
                         expert_action, expert_response = self.generate_expert_response()
                         self.conversation_history.add_message(Role.EXPERT, expert_response, expert_action)
                         print(f"\nExpert: {expert_response}")
@@ -437,6 +496,10 @@ class Simulation:
                 elif next_user_action == UserAction.ASK:
                     # If user asks a question, continue with agent
                     continue
+
+        # Save conversation history at the end
+        saved_file = self.conversation_history.save_to_file()
+        print(f"\nConversation history saved to: {saved_file}")
 
     def generate_structured_response(self, prompt: str, json_schema: dict) -> dict:
         """
@@ -498,22 +561,6 @@ class Simulation:
         
         return self.generate_structured_response(prompt, json_schema)
 
-    # def generate_product_recommendation(self) -> str:
-    #     """Generate product recommendation based on user traits and reviews"""
-    #     product_reviews = "\n".join([
-    #         f"{p.name}: {self.product_reviews[p.name]}"
-    #         for p in self.current_product_list
-    #     ])
-        
-    #     prompt = get_prompt(
-    #         PromptType.PRODUCT_RECOMMENDATION,
-    #         persona=self.user.persona.value,
-    #         preference=self.user.preference.value,
-    #         goal=self.user.goal.value,
-    #         product_reviews=product_reviews
-    #     )
-    #     return self._generate_response(prompt)
-
     def _generate_response(self, prompt: str) -> str:
         """Generate response from the model for a given prompt"""
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
@@ -544,6 +591,6 @@ if __name__ == "__main__":
     
     print(questions_response)
     
-    # Now i have 
+    sim.run()
 
 
