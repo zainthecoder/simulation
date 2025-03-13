@@ -99,9 +99,6 @@ PROMPTS: Dict[PromptType, str] = {
         You should focus on helping the customer make an informed decision.
         """,
         "user": """
-        ### Expert Description: ###
-        {expert_description}
-
         ### User Description: ###
         {user_description}
 

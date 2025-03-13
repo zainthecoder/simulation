@@ -106,7 +106,7 @@ class ConversationHistory:
                 {
                     "role": msg.role.value,
                     "content": msg.content,
-                    "action": msg.action.value if msg.action else None,
+                    "action": msg.action if msg.action else None,
                     "timestamp": msg.timestamp.isoformat(),
                 }
                 for msg in self.messages
@@ -130,12 +130,7 @@ class User:
         self.persona = persona
         self.preference = preference
         self.goal = goal
-        self.current_action: Optional[UserAction] = None
         self.current_product: Optional[str] = None
-
-    def set_action(self, action: UserAction):
-        """Set the current action for the user"""
-        self.current_action = action
 
     def get_user_description(self) -> str:
         """Generate a natural language description of the user"""
@@ -156,17 +151,7 @@ class User:
             Goal.DECISION_MAKING: "and is ready to make a purchase decision",
         }
 
-        action_desc = {
-            UserAction.ASK: "asking general questions about products",
-            UserAction.SEEK: "seeking expert advice",
-            UserAction.DECIDE: "ready to make a purchase decision",
-            UserAcceptAction.ACCEPT: "accepting the previous response",
-            UserAcceptAction.REJECT: "rejecting the previous response",
-        }
-
         base_desc = f"persona: {descriptions[self.persona]}, preference: {preference_desc[self.preference]}, goal: {goal_desc[self.goal]}"
-        if self.current_action:
-            base_desc += f", action: {action_desc[self.current_action]}"
 
         return base_desc
 
@@ -189,17 +174,16 @@ class User:
     def set_product(self, product: str):
         """Set the current product the user is interested in"""
         self.current_product = product
+    
+    def set_product_list(self, product_list):
+        """Set the current product list the user is interested in"""
+        self.current_product_list = product_list
 
 
 class Agent:
     def __init__(self, strategy: Strategy):
-        self.name = "Shopping Assistant"
+        self.name = "Sales Assistant"
         self.strategy = strategy
-        self.current_action: Optional[AgentAction] = None
-
-    def set_action(self, action: AgentAction):
-        """Set the current action for the agent"""
-        self.current_action = action
 
     def get_agent_description(self) -> str:
         """Generate a natural language description of the agent"""
@@ -209,21 +193,8 @@ class Agent:
             Strategy.CUSTOMER_ORIENTED: "focused on customer satisfaction and needs",
         }
 
-        action_desc = {
-            AgentAction.CLARIFICATION: "asking for clarification",
-            AgentAction.ANSWER: "answering questions",
-            AgentAction.RECOMMEND: "making recommendations",
-            AgentAction.DISAGREE: "disagreeing with expert advice",
-            AgentAction.AGREE: "agreeing with expert advice",
-            AgentAction.REFINE: "refining recommendations",
-            AgentAction.WARN: "giving warning",
-            AgentAction.NOKNOWLEDGE: "no knowledge",
-        }
-
-        base_desc = f"A shopping assistant {strategy_desc[self.strategy]}"
-        if self.current_action:
-            base_desc += f", {action_desc[self.current_action]}"
-
+        base_desc = f"A sales assistant {strategy_desc[self.strategy]}"
+        
         return base_desc
 
 
@@ -347,7 +318,7 @@ class Simulation:
             agent_description=self.agent.get_agent_description(),
             user_description=self.user.get_user_description(),
             conversation_context=self.conversation_history.get_context(),
-            product_list=self.current_product_list,
+            product_list=self.user.current_product_list,
             product=self.user.current_product,
             action_list=ActionList,
             last_message=self.conversation_history.get_last_message().content,
@@ -368,9 +339,8 @@ class Simulation:
         }
 
         response = self.generate_structured_response(prompt, json_schema)
-        #action = AgentAction(response["action"])
-        action = response["action"]
-        self.agent.set_action(action)
+        action = AgentAction(response["action"])
+        #action = response["action"]
         print("\nAgent Response:")
         pprint.pprint(response)
         print("\nAgent Action:")
@@ -385,7 +355,7 @@ class Simulation:
             conversation_context=self.conversation_history.get_context(),
             action_list=[UserAction.DECIDE, UserAction.SEEK, UserAction.ASK],
             #action_list=[UserAction.DECIDE, UserAction.SEEK],
-            product_list=self.current_product_list,
+            product_list=self.user.current_product_list,
             product=self.user.current_product,
             last_message=self.conversation_history.get_last_message().content,
         )
@@ -425,7 +395,7 @@ class Simulation:
                 else None
             ),
             action_list=[UserAcceptAction.ACCEPT, UserAcceptAction.REJECT],
-            product_list=self.current_product_list,
+            product_list=self.user.current_product_list,
             product=self.user.current_product,
         )
         print("\nUser Accept Prompt:")
@@ -462,6 +432,7 @@ class Simulation:
             action_list=[ExpertAction.DISAGREE, ExpertAction.AGREE, ExpertAction.SUGGEST],
             product=self.user.current_product,
             last_message=self.conversation_history.get_last_message().content,
+            product_list=self.user.current_product_list,
         )
         print("\nExpert Prompt:")
         pprint.pprint(prompt)
@@ -481,7 +452,6 @@ class Simulation:
         response = self.generate_structured_response(prompt, json_schema)
         #action = ExpertAction(response["action"])
         action = response["action"]
-        self.expert.set_action(action)
         print("\nExpert Response:")
         pprint.pprint(response)
         print("\nExpert Action:")
@@ -664,6 +634,6 @@ if __name__ == "__main__":
     
     # Select a random product list
     current_products = sim.select_random_product_list()
-    
+    sim.user.set_product_list(current_products)
     # Run the simulation (initial questions now handled in run())
     sim.run()
