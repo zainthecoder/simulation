@@ -4,7 +4,7 @@
 
 ## Overview
 
-The **Probabilistic Belief Networks (PBN) Toolkit**, developed by Paul Baggenstoss, is a comprehensive software package for constructing discriminative and generative neural networks using PBN methodology and cross-entropy training. This toolkit includes a graphical user interface (`pbntk.py`) and a complete set of supporting libraries for network development and analysis.
+The **Projected Belief Networks (PBN) Toolkit**, developed by Paul Baggenstoss, is a comprehensive software package for constructing discriminative and generative neural networks using PBN methodology and cross-entropy training. This toolkit includes a graphical user interface (`pbntk.py`) and a complete set of supporting libraries for network development and analysis.
 
 This document provides detailed installation and configuration instructions for Linux systems using Python 3.9 and the required custom Theano backend.
 
